@@ -1,0 +1,76 @@
+-- A)
+SELECT w.warehouse_id, w.warehouse_name, SUM(p.total_product_value) AS total_value
+FROM warehouses w
+JOIN insurance_data i ON w.warehouse_id = i.warehouse_id
+JOIN products p ON i.daily_product_count = p.product_id
+WHERE w.city_id = (SELECT city_id FROM cities WHERE city_name = 'Kyiv')
+AND EXTRACT(QUARTER FROM i.date) = 1 AND EXTRACT(YEAR FROM i.date) = 2020
+GROUP BY w.warehouse_id, w.warehouse_name;
+
+SELECT w.warehouse_id, w.warehouse_name, AVG(i.total_product_value) AS avg_total_value
+FROM warehouses w
+JOIN insurance_data i ON w.warehouse_id = i.warehouse_id
+WHERE i.date BETWEEN CURRENT_DATE - INTERVAL '7 days' AND CURRENT_DATE
+GROUP BY w.warehouse_id, w.warehouse_name;
+
+-- B)
+WITH FreeSpacePercentage AS (
+  SELECT c.city_id, i.date, 
+         100 - (SUM(p.total_product_value) / SUM(w.total_warehouse_space) * 100) AS free_space_percentage,
+         RANK() OVER (PARTITION BY c.city_id, i.date ORDER BY free_space_percentage) AS rank
+  FROM cities c
+  JOIN district d ON c.city_id = d.city_id
+  JOIN warehouses w ON d.district_id = w.district_id
+  JOIN insurance_data i ON w.warehouse_id = i.warehouse_id
+  JOIN products p ON i.daily_product_count = p.product_id
+  WHERE EXTRACT(YEAR FROM i.date) = 2021
+  GROUP BY c.city_id, i.date
+)
+SELECT * FROM FreeSpacePercentage;
+
+-- C)
+SELECT w.warehouse_id, i.date, 
+       100 - (SUM(p.total_product_value) / SUM(w.total_warehouse_space) * 100) AS free_space_percentage
+FROM warehouses w
+JOIN insurance_data i ON w.warehouse_id = i.warehouse_id
+JOIN products p ON i.daily_product_count = p.product_id
+JOIN district d ON w.district_id = d.district_id
+JOIN cities c ON d.city_id = c.city_id
+WHERE EXTRACT(YEAR FROM i.date) = 2021 AND EXTRACT(MONTH FROM i.date) BETWEEN 1 AND 6
+GROUP BY w.warehouse_id, i.date;
+
+-- D)
+SELECT w.warehouse_id, EXTRACT(MONTH FROM i.date) AS month, 
+       AVG(i.total_product_value) AS avg_total_value
+FROM warehouses w
+JOIN insurance_data i ON w.warehouse_id = i.warehouse_id
+WHERE EXTRACT(YEAR FROM i.date) = 2020
+GROUP BY w.warehouse_id, EXTRACT(MONTH FROM i.date);
+
+-- E)
+SELECT r.region_id, r.region_name, EXTRACT(MONTH FROM i.date) AS month, 
+       AVG(i.total_product_value) AS avg_total_value
+FROM regions r
+JOIN cities c ON r.region_id = c.region_id
+JOIN district d ON c.city_id = d.city_id
+JOIN warehouses w ON d.district_id = w.district_id
+JOIN insurance_data i ON w.warehouse_id = i.warehouse_id
+WHERE EXTRACT(YEAR FROM i.date) = 2020
+GROUP BY r.region_id, r.region_name, EXTRACT(MONTH FROM i.date);
+
+-- F)
+WITH FreeSpacePercentage AS (
+  SELECT r.region_id, r.region_name, EXTRACT(MONTH FROM i.date) AS month, 
+         100 - (SUM(p.total_product_value) / SUM(w.total_warehouse_space) * 100) AS free_space_percentage
+  FROM regions r
+  JOIN cities c ON r.region_id = c.region_id
+  JOIN district d ON c.city_id = d.city_id
+  JOIN warehouses w ON d.district_id = w.district_id
+  JOIN insurance_data i ON w.warehouse_id = i.warehouse_id
+  JOIN products p ON i.daily_product_count = p.product_id
+  WHERE EXTRACT(YEAR FROM i.date) = 2021
+  GROUP BY r.region_id, r.region_name, EXTRACT(MONTH FROM i.date)
+)
+SELECT region_id, region_name, month, AVG(free_space_percentage) AS avg_free_space_percentage
+FROM FreeSpacePercentage
+GROUP BY region_id, region_name, month;
